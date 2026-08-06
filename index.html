@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cycling Workout Builder — Wahoo ELEMNT</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>Workout Builder <span class="sub">for Wahoo ELEMNT</span></h1>
+  <div class="topbar-fields">
+    <label>Name
+      <input id="wkt-name" type="text" value="My Workout" maxlength="15">
+    </label>
+    <label>FTP (W)
+      <input id="ftp" type="number" min="50" max="600" step="1" value="250">
+    </label>
+    <label>Show power as
+      <select id="power-unit">
+        <option value="watts">Watts</option>
+        <option value="pct">% FTP</option>
+      </select>
+    </label>
+  </div>
+  <div class="topbar-summary" id="summary"></div>
+  <div class="topbar-actions">
+    <button id="export-zwo">Export .zwo</button>
+    <button id="export-fit" class="primary">Export .fit</button>
+    <button id="clear-all" class="danger">Clear</button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="palette">
+    <h2>Blocks</h2>
+    <p class="hint">Drag a block onto the timeline →</p>
+    <div class="palette-card" draggable="true" data-type="warmup">
+      <strong>Warm Up</strong>
+      <span>Ramp up in power</span>
+    </div>
+    <div class="palette-card" draggable="true" data-type="steady">
+      <strong>Steady</strong>
+      <span>Flat target watts</span>
+    </div>
+    <div class="palette-card" draggable="true" data-type="ramp">
+      <strong>Ramp</strong>
+      <span>Power ramps low→high</span>
+    </div>
+    <div class="palette-card" draggable="true" data-type="repeat">
+      <strong>Interval (Reps/Sets)</strong>
+      <span>Repeat work/rest steps</span>
+    </div>
+    <div class="palette-card" draggable="true" data-type="freeride">
+      <strong>Free Ride</strong>
+      <span>Open, no target</span>
+    </div>
+    <div class="palette-card" draggable="true" data-type="cooldown">
+      <strong>Cool Down</strong>
+      <span>Ramp down in power</span>
+    </div>
+
+    <h2 class="zones-h">Zone Key</h2>
+    <ul class="zone-key" id="zone-key"></ul>
+  </aside>
+
+  <section class="timeline-panel">
+    <div id="timeline" class="timeline dropzone" data-empty-text="Drag blocks here to build your workout">
+    </div>
+  </section>
+
+  <section class="graph-panel">
+    <h2>Power Profile</h2>
+    <canvas id="graph" width="900" height="240"></canvas>
+    <p class="graph-legend" id="graph-legend"></p>
+  </section>
+</main>
+
+<footer class="foot">
+  <p>Export <strong>.fit</strong> and copy it to your ELEMNT over USB into the device's <code>Workouts</code> folder
+     (device shows as a USB drive; folder path varies slightly by ELEMNT generation/firmware — look for a
+     <code>Workouts</code> folder at the top level). Export <strong>.zwo</strong> if you want to import into Zwift,
+     TrainerRoad, or other platforms that accept the Zwift workout format instead.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
