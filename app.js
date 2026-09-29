@@ -241,8 +241,9 @@
       });
       el.querySelector('[data-key="reps"]').addEventListener("input", (e) => {
         b.reps = Math.max(1, parseInt(e.target.value, 10) || 1);
-        update();
+        refresh();
       });
+      el.querySelector('[data-key="reps"]').addEventListener("change", update);
     } else {
       const titleMap = { warmup: "Warm Up", cooldown: "Cool Down", ramp: "Ramp", steady: "Steady", freeride: "Free Ride" };
       let fields = `<label>Time<input class="dur" type="text" data-key="duration" value="${fmtDur(b.duration)}"></label>`;
@@ -293,8 +294,9 @@
           const mode = inp.dataset.mode;
           const val = parseFloat(inp.value) || 0;
           c[key] = mode === "pct" ? Math.round((val / 100) * state.ftp) : Math.round(val);
-          update();
+          refresh();
         });
+        inp.addEventListener("change", update);
       });
     }
     paintPowerFields();
@@ -314,8 +316,9 @@
     row.querySelector('[data-key="label"]').addEventListener("input", (e) => { c.label = e.target.value; });
     row.querySelector('[data-key="duration"]').addEventListener("input", (e) => {
       c.duration = parseDur(e.target.value, c.duration);
-      update();
+      refresh();
     });
+    row.querySelector('[data-key="duration"]').addEventListener("change", update);
     row.querySelector(".remove-child").addEventListener("click", () => {
       parentBlock.children.splice(idx, 1);
       update();
@@ -334,8 +337,9 @@
           const val = parseFloat(inp.value) || 0;
           b[key] = mode === "pct" ? Math.round((val / 100) * state.ftp) : Math.round(val);
         }
-        update();
+        refresh();
       });
+      inp.addEventListener("change", update);
     });
   }
 
@@ -424,6 +428,11 @@
 
   function update() {
     renderTimeline();
+    refresh();
+  }
+
+  // Redraws everything except the timeline, so inputs keep focus while typing.
+  function refresh() {
     renderSummary();
     renderGraph();
   }
