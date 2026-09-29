@@ -221,7 +221,7 @@
           <span class="block-handle">⠿</span>
           <span class="block-title">Interval</span>
           <label>Sets<input type="number" min="1" max="99" data-key="reps" class="dur" value="${b.reps}"></label>
-          <span class="block-fields">≈ ${fmtDur(b.children.reduce((s, c) => s + c.duration, 0) * b.reps)} total</span>
+          <span class="block-fields repeat-total">≈ ${fmtDur(repeatTotal(b))} total</span>
           <div class="block-actions">
             <button class="small danger remove-btn">Remove</button>
           </div>
@@ -243,7 +243,6 @@
         b.reps = Math.max(1, parseInt(e.target.value, 10) || 1);
         refresh();
       });
-      el.querySelector('[data-key="reps"]').addEventListener("change", update);
     } else {
       const titleMap = { warmup: "Warm Up", cooldown: "Cool Down", ramp: "Ramp", steady: "Steady", freeride: "Free Ride" };
       let fields = `<label>Time<input class="dur" type="text" data-key="duration" value="${fmtDur(b.duration)}"></label>`;
@@ -296,7 +295,6 @@
           c[key] = mode === "pct" ? Math.round((val / 100) * state.ftp) : Math.round(val);
           refresh();
         });
-        inp.addEventListener("change", update);
       });
     }
     paintPowerFields();
@@ -318,7 +316,7 @@
       c.duration = parseDur(e.target.value, c.duration);
       refresh();
     });
-    row.querySelector('[data-key="duration"]').addEventListener("change", update);
+    row.querySelector('[data-key="duration"]').addEventListener("change", (e) => { e.target.value = fmtDur(c.duration); });
     row.querySelector(".remove-child").addEventListener("click", () => {
       parentBlock.children.splice(idx, 1);
       update();
@@ -339,7 +337,9 @@
         }
         refresh();
       });
-      inp.addEventListener("change", update);
+      if (inp.dataset.key === "duration") {
+        inp.addEventListener("change", () => { inp.value = fmtDur(b.duration); });
+      }
     });
   }
 
@@ -435,6 +435,15 @@
   function refresh() {
     renderSummary();
     renderGraph();
+    for (const b of state.blocks) {
+      if (b.type !== "repeat") continue;
+      const span = timelineEl.querySelector(`[data-id="${b.id}"] .repeat-total`);
+      if (span) span.textContent = `≈ ${fmtDur(repeatTotal(b))} total`;
+    }
+  }
+
+  function repeatTotal(b) {
+    return b.children.reduce((s, c) => s + c.duration, 0) * b.reps;
   }
 
   renderZoneKey();
