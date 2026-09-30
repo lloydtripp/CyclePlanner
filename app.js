@@ -511,6 +511,43 @@
     download(name + ".zwo", new Blob([buildZWO()], { type: "application/xml" }));
   });
 
+  // ---------- MRC export ----------
+  // Text format (MINUTES PERCENT of FTP) read from the ELEMNT's `plans` folder.
+  // Each step is written as a start and end point so ramps interpolate linearly.
+  // MRC has no free-ride segment; free ride is written as 0% FTP.
+
+  function buildMRC() {
+    const name = document.getElementById("wkt-name").value || "Workout";
+    const ftp = state.ftp;
+    const pct = (w) => ((w / ftp) * 100).toFixed(1);
+    const rows = [];
+    let t = 0;
+    for (const st of expandSteps(state.blocks)) {
+      rows.push(`${(t / 60).toFixed(2)}\t${pct(st.low)}`);
+      t += st.duration;
+      rows.push(`${(t / 60).toFixed(2)}\t${pct(st.high)}`);
+    }
+    return [
+      "[COURSE HEADER]",
+      "VERSION = 2",
+      "UNITS = ENGLISH",
+      `DESCRIPTION = ${name}`,
+      `FILE NAME = ${name}`,
+      "MINUTES PERCENT",
+      "[END COURSE HEADER]",
+      "[COURSE DATA]",
+      ...rows,
+      "[END COURSE DATA]",
+      "",
+    ].join("\r\n");
+  }
+
+  document.getElementById("export-mrc").addEventListener("click", () => {
+    if (!state.blocks.length) { alert("Add at least one block first."); return; }
+    const name = (document.getElementById("wkt-name").value || "workout").replace(/[^\w\- ]+/g, "").trim() || "workout";
+    download(name + ".mrc", new Blob([buildMRC()], { type: "text/plain" }));
+  });
+
   // ---------- FIT export ----------
   // Minimal FIT binary encoder for workout / workout_step messages.
   // Reference layout: 12-byte header (no header CRC), record stream, 2-byte file CRC.

@@ -26,7 +26,8 @@
   <div class="topbar-summary" id="summary"></div>
   <div class="topbar-actions">
     <button id="export-zwo">Export .zwo</button>
-    <button id="export-fit" class="primary">Export .fit</button>
+    <button id="export-fit">Export .fit</button>
+    <button id="export-mrc" class="primary">Export .mrc</button>
     <button id="clear-all" class="danger">Clear</button>
   </div>
 </header>
@@ -77,10 +78,10 @@
 </main>
 
 <footer class="foot">
-  <p>Export <strong>.fit</strong> and copy it to your ELEMNT over USB into the device's <code>Workouts</code> folder
-     (device shows as a USB drive; folder path varies slightly by ELEMNT generation/firmware — look for a
-     <code>Workouts</code> folder at the top level). Export <strong>.zwo</strong> if you want to import into Zwift,
-     TrainerRoad, or other platforms that accept the Zwift workout format instead.</p>
+  <p>Export <strong>.mrc</strong> and copy it to your ELEMNT over USB into <code>USB storage\plans</code>
+     (create the <code>plans</code> folder if it doesn't exist), then sync planned workouts on the device.
+     <strong>.mrc</strong> targets are % of the FTP set on the ELEMNT; Free Ride blocks are written as 0%.
+     Export <strong>.zwo</strong> to import into Zwift, TrainerRoad, or other platforms that accept the Zwift workout format.</p>
 </footer>
 
 <script src="app.js"></script>
