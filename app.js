@@ -752,6 +752,161 @@
     return out;
   }
 
+  // ---------- FIT import ----------
+  // Decodes workout (26) and workout_step (27) messages back into blocks.
+  // Power targets: custom low/high (<1000 = %FTP, >=1000 = watts + 1000) or a zone number.
+  // Steps with a non-time duration or a non-power target are imported as Free Ride.
+  // A low/high range is a ramp in files from this app; from other tools it is a target
+  // band (imported as steady at the midpoint) unless the step is named like a ramp.
+
+  function parseFIT(buf) {
+    const dv = new DataView(buf);
+    const headerSize = dv.getUint8(0);
+    const sig = String.fromCharCode(...new Uint8Array(buf, 8, 4));
+    if (sig !== ".FIT") throw new Error("Not a FIT file.");
+    const end = Math.min(headerSize + dv.getUint32(4, true), buf.byteLength);
+    const defs = {};
+    const msgs = [];
+    let off = headerSize;
+    while (off < end) {
+      const h = dv.getUint8(off++);
+      if (!(h & 0x80) && (h & 0x40)) {
+        const little = dv.getUint8(off + 1) === 0;
+        const global = dv.getUint16(off + 2, little);
+        const n = dv.getUint8(off + 4);
+        off += 5;
+        const fields = [];
+        for (let i = 0; i < n; i++, off += 3) {
+          fields.push({ num: dv.getUint8(off), size: dv.getUint8(off + 1), base: dv.getUint8(off + 2) });
+        }
+        let devSize = 0;
+        if (h & 0x20) {
+          const nd = dv.getUint8(off++);
+          for (let i = 0; i < nd; i++, off += 3) devSize += dv.getUint8(off + 1);
+        }
+        defs[h & 0x0f] = { little, global, fields, devSize };
+        continue;
+      }
+      const def = defs[h & 0x80 ? (h >> 5) & 0x03 : h & 0x0f];
+      if (!def) throw new Error("Corrupt FIT file (data before definition).");
+      const m = { global: def.global };
+      for (const f of def.fields) {
+        m[f.num] = readFitField(dv, off, f, def.little);
+        off += f.size;
+      }
+      off += def.devSize;
+      msgs.push(m);
+    }
+    return msgs;
+  }
+
+  function readFitField(dv, off, f, little) {
+    const bt = f.base & 0x1f;
+    if (bt === 7) {
+      const bytes = new Uint8Array(dv.buffer, off, f.size);
+      const z = bytes.indexOf(0);
+      return new TextDecoder().decode(z === -1 ? bytes : bytes.subarray(0, z));
+    }
+    // Returns null for FIT "invalid" sentinel values.
+    if (f.size === 1) { const v = dv.getUint8(off); return v === 0xff ? null : v; }
+    if (f.size === 2) { const v = dv.getUint16(off, little); return v === 0xffff ? null : v; }
+    if (f.size === 4) { const v = dv.getUint32(off, little); return v === 0xffffffff ? null : v; }
+    return null;
+  }
+
+  const ZONE_MID_PCT = { 1: 45, 2: 65, 3: 83, 4: 98, 5: 113, 6: 135, 7: 160 };
+
+  function fitPowerToWatts(v) {
+    return v >= 1000 ? v - 1000 : Math.round((v / 100) * state.ftp);
+  }
+
+  function fitStepsToBlocks(steps, ownFile) {
+    const out = []; // { stepIdx, block }
+    const warnings = new Set();
+    steps.forEach((st, idx) => {
+      const durType = st[1] ?? DURATION_OPEN;
+      if (durType === DURATION_REPEAT_UNTIL_STEPS_CMPLT) {
+        const from = st[2] ?? 0;
+        const reps = Math.max(1, st[4] ?? 1);
+        const inner = [];
+        while (out.length && out[out.length - 1].stepIdx >= from) inner.unshift(out.pop().block);
+        const children = [];
+        for (const b of inner) {
+          if (b.type === "repeat") {
+            warnings.add("Nested repeats were unrolled.");
+            for (let r = 0; r < b.reps; r++) b.children.forEach((c) => children.push({ ...c, id: nextId() }));
+          } else {
+            children.push(toChild(b));
+          }
+        }
+        if (children.length) out.push({ stepIdx: from, block: { id: nextId(), type: "repeat", reps, children } });
+        return;
+      }
+      if (durType > DURATION_REPEAT_UNTIL_STEPS_CMPLT) {
+        warnings.add("Conditional repeats (until time/distance/HR/power) were imported as a single pass.");
+        return;
+      }
+      const name = st[0] || "";
+      if (durType !== DURATION_TIME || st[3] !== TARGET_POWER) {
+        if (durType !== DURATION_TIME && durType !== DURATION_OPEN) warnings.add("Steps with non-time durations were imported as 5-minute Free Ride.");
+        if (st[3] !== TARGET_OPEN && st[3] !== TARGET_POWER && st[3] != null) warnings.add("Non-power targets (e.g. heart rate) were imported as Free Ride.");
+        const duration = durType === DURATION_TIME ? Math.round((st[2] ?? 0) / 1000) : 300;
+        out.push({ stepIdx: idx, block: { id: nextId(), type: "freeride", duration } });
+        return;
+      }
+      const duration = Math.round((st[2] ?? 0) / 1000);
+      let low, high;
+      if (st[4]) {
+        low = high = Math.round(((ZONE_MID_PCT[st[4]] ?? 100) / 100) * state.ftp);
+      } else {
+        low = fitPowerToWatts(st[5] ?? 0);
+        high = fitPowerToWatts(st[6] ?? st[5] ?? 0);
+      }
+      const intensity = st[7];
+      let block;
+      if (intensity === INTENSITY.warmup) block = { type: "warmup", duration, powerLow: low, powerHigh: high };
+      else if (intensity === INTENSITY.cooldown) block = { type: "cooldown", duration, powerLow: low, powerHigh: high };
+      else if (low !== high && (ownFile || /ramp/i.test(name))) block = { type: "ramp", duration, powerLow: low, powerHigh: high };
+      else block = { type: "steady", duration, power: Math.round((low + high) / 2) };
+      block.id = nextId();
+      if (name) block.label = name;
+      out.push({ stepIdx: idx, block });
+    });
+    return { blocks: out.map((x) => x.block), warnings: [...warnings] };
+  }
+
+  function toChild(b) {
+    const label = b.label;
+    if (b.type === "steady") return { id: nextId(), type: "steady", duration: b.duration, power: b.power, label };
+    if (b.type === "freeride") return { id: nextId(), type: "steady", duration: b.duration, power: 0, label };
+    return { id: nextId(), type: "ramp", duration: b.duration, powerLow: b.powerLow, powerHigh: b.powerHigh, label };
+  }
+
+  const fitInput = document.getElementById("import-fit-file");
+  document.getElementById("import-fit").addEventListener("click", () => fitInput.click());
+  fitInput.addEventListener("change", async () => {
+    const file = fitInput.files[0];
+    fitInput.value = "";
+    if (!file) return;
+    try {
+      const msgs = parseFIT(await file.arrayBuffer());
+      const steps = msgs.filter((m) => m.global === 27).sort((a, b) => (a[254] ?? 0) - (b[254] ?? 0));
+      if (!steps.length) throw new Error("No workout steps found. Only structured workout .fit files can be imported, not recorded rides.");
+      if (state.blocks.length && !confirm("Replace the current workout with the imported one?")) return;
+      const fileId = msgs.find((m) => m.global === 0);
+      // Matches the file_id written by buildFIT(): manufacturer = development, serial 1.
+      const ownFile = !!fileId && fileId[1] === 255 && fileId[3] === 1;
+      const { blocks, warnings } = fitStepsToBlocks(steps, ownFile);
+      state.blocks = blocks;
+      const wkt = msgs.find((m) => m.global === 26);
+      document.getElementById("wkt-name").value = (wkt && wkt[8]) || file.name.replace(/\.fit$/i, "");
+      update();
+      if (warnings.length) alert("Imported with changes:\n- " + warnings.join("\n- "));
+    } catch (err) {
+      alert("Could not import " + file.name + ": " + err.message);
+    }
+  });
+
   document.getElementById("export-fit").addEventListener("click", () => {
     if (!state.blocks.length) { alert("Add at least one block first."); return; }
     const name = (document.getElementById("wkt-name").value || "workout").replace(/[^\w\- ]+/g, "").trim() || "workout";

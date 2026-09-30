@@ -14,3 +14,4 @@
 - Fixed inputs losing focus while typing: field edits no longer rebuild the timeline (PRs #1, #2).
 - User reports ELEMNT expects `.mrc` files in `USB storage\plans`. Added `.mrc` export (MINUTES PERCENT, two points per step; free ride written as 0%) and made it the primary export; updated footer instructions.
 - Open next steps: confirm `.mrc` loads on the device; `.fit` path/folder instructions removed from footer since the device uses `plans`.
+- Added `.fit` import (workout/workout_step messages) so prior workouts can be edited. Round-trip export→import→export is byte-identical for `.mrc`/`.zwo`. Third-party files: %FTP and watt targets, power zones (zone midpoint), big-endian and developer fields handled; non-power targets and non-time durations become Free Ride with a warning. Recorded-ride `.fit` files (no workout steps) are rejected.
